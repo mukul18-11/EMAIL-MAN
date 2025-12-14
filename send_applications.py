@@ -1,209 +1,126 @@
-#!/usr/bin/env python3
-"""
-send_applications.py
-
-Usage:
-  # Dry run (preview only)
-  python send_applications.py --csv /mnt/data/1000.csv --resume "/mnt/data/Ayush Chauhan.pdf" --dry-run
-
-  # Actually send (make sure SMTP credentials set in env or pass via args)
-  python send_applications.py --csv /mnt/data/1000.csv --resume "/mnt/data/Ayush Chauhan.pdf" --send
-
-Notes:
-- For Gmail, create an App Password (recommended) and use it as SMTP password.
-- Be responsible: don't mass-spam; respect privacy and anti-spam laws.
-"""
-
-import csv
-import os
-import time
-import argparse
-import logging
-import smtplib
-from email.message import EmailMessage
-from email.utils import formataddr
-from pathlib import Path
-
-# ---- Configuration ----
-DEFAULT_DELAY_SECONDS = 3      # wait between sends (throttle)
-MAX_RETRIES = 3
-RETRY_BACKOFF = 5              # seconds, multiply for subsequent retries
-
-# Template texts for different roles
-# ---- Configuration ----
 TEMPLATES = {
     "frontend": {
-        "subject": "{company} — Frontend Engineer Application — Ayush Chauhan",
+        "subject": "{company} — Full Stack Developer Application — Mukul Kumar",
         "body": """Hi {contact_name},
 
-Hope you’re doing well! I’m Ayush Chauhan, an engineering intern at Agnitech Forge and an NSUT graduate with a strong foundation in full stack development. I have worked extensively with React, Next.js, and modern frontend systems to build user-friendly, performant applications.
+I hope you are doing well.
 
-I’m actively looking for fresher opportunities and would love to connect to discuss any possibilities at {company}.
+My name is Mukul Kumar, a 2025 graduate, and I am writing to express my interest in full stack development opportunities at {company}. I am actively looking for internship or full-time roles and would love to contribute to your team.
 
-Warm regards,
-Ayush
+I have 6 months of internship experience as a Full Stack Developer at AccioJob, where I worked with the MERN stack on real-world projects. Alongside this, I have strong fundamentals in C++ and Data Structures & Algorithms. Problem-solving is one of my key strengths, and I consistently practice DSA through coding platforms.
+
+I am flexible and open to any suitable role based on your current hiring needs.
+
+You can find my work and profiles here:
+• GitHub: https://github.com/mukul18-11  
+• LinkedIn: https://www.linkedin.com/in/mukul1811/  
+• LeetCode: https://leetcode.com/u/mukul18_11/  
+• CodeChef: https://www.codechef.com/users/mukul_1811  
+
+I’ve attached my resume for your review. I would be grateful for an opportunity to discuss how I can add value to your team.
+
+Thanks,  
+Mukul Kumar
 """
     },
+
     "backend": {
-        "subject": "{company} — Backend Engineer Application — Ayush Chauhan",
+        "subject": "{company} — Software / Backend Developer Application — Mukul Kumar",
         "body": """Hi {contact_name},
 
-Hope you’re doing well! I’m Ayush Chauhan, an engineering intern at Agnitech Forge and an NSUT graduate with a strong foundation in full stack development. I’ve gained hands-on experience with Node.js, Express, and MongoDB, working on APIs, integrations, and backend workflows.
+I hope you are doing well.
 
-I’m actively looking for fresher opportunities and would love to connect to discuss any possibilities at {company}.
+My name is Mukul Kumar, a 2025 graduate, and I am reaching out to explore backend or software development opportunities at {company}. I am open to both internship and full-time roles.
 
-Warm regards,
-Ayush
+I have 6 months of internship experience as a Full Stack Developer at AccioJob, where I worked on MERN stack-based applications. My skill set includes C++, strong Data Structures & Algorithms, and a solid problem-solving mindset.
+
+I am flexible and open to any suitable role based on your current hiring needs.
+
+Profiles for reference:
+• GitHub: https://github.com/mukul18-11  
+• LinkedIn: https://www.linkedin.com/in/mukul1811/  
+• LeetCode: https://leetcode.com/u/mukul18_11/  
+• CodeChef: https://www.codechef.com/users/mukul_1811  
+
+Please find my resume attached. I would be happy to connect and discuss further.
+
+Thanks,  
+Mukul Kumar
 """
     },
+
     "software": {
-        "subject": "{company} — Software Engineer Application — Ayush Chauhan",
+        "subject": "{company} — Software Developer Application — Mukul Kumar",
         "body": """Hi {contact_name},
 
-Hope you’re doing well! I’m Ayush Chauhan, an engineering intern at Agnitech Forge and an NSUT graduate with a solid background in full stack software development. My experience spans React, Node.js, MongoDB, and even blockchain development through Solidity projects.
+I hope you’re doing well.
 
-I’m actively looking for fresher opportunities and would love to connect to discuss any possibilities at {company}.
+I’m Mukul Kumar, a 2025 graduate, writing to apply for software development opportunities at {company}. I am currently seeking internship or full-time roles where I can learn, grow, and contribute effectively.
 
-Warm regards,
-Ayush
+I bring 6 months of Full Stack Developer internship experience from AccioJob, along with hands-on work using the MERN stack, C++, and strong Data Structures & Algorithms. Problem-solving through DSA is one of my strongest skills.
+
+I am flexible and open to any suitable role based on your current hiring needs.
+
+My profiles:
+• GitHub: https://github.com/mukul18-11  
+• LinkedIn: https://www.linkedin.com/in/mukul1811/  
+• LeetCode: https://leetcode.com/u/mukul18_11/  
+• CodeChef: https://www.codechef.com/users/mukul_1811  
+
+I’ve attached my resume for your consideration. Looking forward to hearing from you.
+
+Thanks,  
+Mukul Kumar
+"""
+    },
+
+    "ml": {
+        "subject": "{company} — Software Developer Application — Mukul Kumar",
+        "body": """Hi {contact_name},
+
+I hope you’re doing well.
+
+My name is Mukul Kumar, a 2025 graduate, and I am interested in software-related opportunities at {company}. I am open to internships and full-time roles depending on requirements.
+
+I have 6 months of Full Stack Developer internship experience at AccioJob, along with strong skills in MERN stack, C++, and Data Structures & Algorithms. I have a strong problem-solving approach and enjoy working on logic-intensive challenges.
+
+I am flexible and open to any suitable role based on your current hiring needs.
+
+You can review my work here:
+• GitHub: https://github.com/mukul18-11  
+• LinkedIn: https://www.linkedin.com/in/mukul1811/  
+• LeetCode: https://leetcode.com/u/mukul18_11/  
+• CodeChef: https://www.codechef.com/users/mukul_1811  
+
+Resume attached for reference.
+
+Thanks,  
+Mukul Kumar
+"""
+    },
+
+    "general": {
+        "subject": "{company} — Internship / Full-Time Application — Mukul Kumar",
+        "body": """Hi {contact_name},
+
+I hope you are doing well.
+
+I’m Mukul Kumar, a 2025 graduate, and I’m reaching out to explore internship or full-time opportunities at {company}. I am actively seeking roles where I can apply my skills and grow as a developer.
+
+I have 6 months of internship experience as a Full Stack Developer at AccioJob. My experience includes working with the MERN stack, C++, and strong Data Structures & Algorithms. I am confident in my problem-solving abilities and regularly practice DSA.
+
+I am flexible and open to any suitable role based on your current hiring needs.
+
+Here are my profiles for reference:
+• GitHub: https://github.com/mukul18-11  
+• LinkedIn: https://www.linkedin.com/in/mukul1811/  
+• LeetCode: https://leetcode.com/u/mukul18_11/  
+• CodeChef: https://www.codechef.com/users/mukul_1811  
+
+Please find my resume attached. I would appreciate the opportunity to connect.
+
+Thanks,  
+Mukul Kumar
 """
     }
 }
-
-
-# ---- Helper functions ----
-
-def read_csv(path):
-    rows = []
-    with open(path, newline='', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
-        for r in reader:
-            rows.append(r)
-    return rows
-
-
-def build_message(from_name, from_email, to_email, subject, body_text, resume_path):
-    msg = EmailMessage()
-    msg['From'] = formataddr((from_name, from_email))
-    msg['To'] = to_email
-    msg['Subject'] = subject
-    msg.set_content(body_text)
-
-    # attach resume
-    resume_path = Path(resume_path)
-    if resume_path.exists():
-        with open(resume_path, 'rb') as rf:
-            data = rf.read()
-        maintype = 'application'
-        subtype = 'pdf'
-        msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=resume_path.name)
-    else:
-        raise FileNotFoundError(f"Resume not found at {resume_path}")
-
-    return msg
-
-
-def send_smtp(smtp_host, smtp_port, smtp_user, smtp_pass, message, use_tls=True):
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            if use_tls:
-                server = smtplib.SMTP(smtp_host, smtp_port, timeout=60)
-                server.starttls()
-            else:
-                server = smtplib.SMTP(smtp_host, smtp_port, timeout=60)
-            server.login(smtp_user, smtp_pass)
-            server.send_message(message)
-            server.quit()
-            return True
-        except Exception as e:
-            logging.exception("Send attempt %s failed: %s", attempt, e)
-            if attempt < MAX_RETRIES:
-                time.sleep(RETRY_BACKOFF * attempt)
-            else:
-                return False
-
-
-# ---- Main routine ----
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--csv', required=True, help='Path to CSV file with recipients')
-    parser.add_argument('--resume', required=True, help='Path to resume PDF')
-    parser.add_argument('--from-email', default=os.getenv('FROM_EMAIL'), help='Sender email (or env FROM_EMAIL)')
-    parser.add_argument('--from-name', default=os.getenv('FROM_NAME', 'Ayush Chauhan'), help='Sender display name')
-    parser.add_argument('--smtp-host', default=os.getenv('SMTP_HOST', 'smtp.gmail.com'), help='SMTP host')
-    parser.add_argument('--smtp-port', type=int, default=int(os.getenv('SMTP_PORT', 587)), help='SMTP port')
-    parser.add_argument('--smtp-user', default=os.getenv('SMTP_USER'), help='SMTP username (often same as from-email)')
-    parser.add_argument('--smtp-pass', default=os.getenv('SMTP_PASS'), help='SMTP password (app password or SMTP pwd)')
-    parser.add_argument('--delay', type=float, default=DEFAULT_DELAY_SECONDS, help='Delay between sends (sec)')
-    parser.add_argument('--dry-run', action='store_true', help='Only preview messages, do not send')
-    parser.add_argument('--send', action='store_true', help='Actually send emails (requires SMTP settings)')
-    args = parser.parse_args()
-
-    logging.basicConfig(filename='email_send.log', level=logging.INFO,
-                        format='%(asctime)s %(levelname)s %(message)s')
-    logging.info("Starting email run. dry_run=%s, send=%s", args.dry_run, args.send)
-
-    # Basic credential checks if sending
-    if args.send:
-        if not (args.smtp_user and args.smtp_pass and args.from_email):
-            logging.error("SMTP credentials or from-email not provided. Set --smtp-user --smtp-pass --from-email or env vars.")
-            print("Missing SMTP settings (SMTP_USER, SMTP_PASS, or FROM_EMAIL). Aborting.")
-            return
-
-    rows = read_csv(args.csv)
-    if not rows:
-        print("No rows found in CSV. Aborting.")
-        return
-
-    for i, r in enumerate(rows, start=1):
-        to_email = (r.get('email') or '').strip()
-        company = (r.get('company') or 'Company').strip()
-        contact_name = (r.get('contact_name') or '').strip() or 'Hiring Team'
-        preferred = (r.get('role_preference') or '').strip().lower()
-        subject_override = (r.get('subject') or '').strip()
-
-        if not to_email:
-            logging.warning("Row %d missing email, skipping", i)
-            continue
-
-        # pick template
-        role = 'software'
-        if preferred in ('frontend', 'front-end', 'ui'):
-            role = 'frontend'
-        elif preferred in ('backend', 'back-end'):
-            role = 'backend'
-
-        template = TEMPLATES.get(role)
-        subject = subject_override if subject_override else template['subject'].format(company=company)
-        body = template['body'].format(contact_name=contact_name, company=company)
-
-        try:
-            msg = build_message(args.from_name, args.from_email, to_email, subject, body, args.resume)
-        except FileNotFoundError as fe:
-            logging.error("Resume file error: %s", fe)
-            print(fe)
-            return
-
-        # Preview / dry-run
-        if args.dry_run or not args.send:
-            print("----------")
-            print(f"To: {to_email}")
-            print(f"Subject: {subject}")
-            print(body)
-            print("Attachment:", args.resume)
-            logging.info("Previewed email to %s (%s)", to_email, company)
-        else:
-            success = send_smtp(args.smtp_host, args.smtp_port, args.smtp_user, args.smtp_pass, msg)
-            if success:
-                logging.info("Sent to %s", to_email)
-            else:
-                logging.error("Failed to send to %s after retries", to_email)
-
-            time.sleep(args.delay)
-
-    logging.info("Run complete.")
-
-
-if __name__ == "__main__":
-    main()
